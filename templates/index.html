@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bảng Điều Khiển IoT</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f9; }
+        .container { width: 80%; margin: 20px auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0px 0px 10px rgba(0,0,0,0.1); }
+        #led-btn {
+            padding: 15px 40px; font-size: 20px; font-weight: bold; border: none; cursor: pointer;
+            border-radius: 50px; color: white; margin: 20px 0; transition: 0.3s;
+        }
+        .led-on { background-color: #ff0000; box-shadow: 0 0 20px #ff0000; } /* Nút đỏ rực */
+        .led-off { background-color: #555555; } /* Nút xám tối */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Giám sát Nhiệt độ & Độ ẩm</h2>
+        
+        <!-- Nút bấm điều khiển LED -->
+        <button id="led-btn" class="led-off" onclick="toggleLED()">LED ĐANG TẮT</button>
+        
+        <!-- Biểu đồ -->
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <script>
+        let myChart;
+        let ledStatus = false;
+
+        // Cấu hình vẽ biểu đồ
+        const ctx = document.getElementById('myChart').getContext('2d');
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Nhiệt độ (°C)', borderColor: 'red', data: [], fill: false, tension: 0.1 },
+                    { label: 'Độ ẩm (%)', borderColor: 'blue', data: [], fill: false, tension: 0.1 }
+                ]
+            }
+        });
+
+        // Hàm lấy dữ liệu từ CSDL (tự động chạy 5 giây/lần)
+        function fetchData() {
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => {
+                    myChart.data.labels = data.map(row => row.thoi_gian);
+                    myChart.data.datasets[0].data = data.map(row => row.nhiet_do);
+                    myChart.data.datasets[1].data = data.map(row => row.do_am);
+                    myChart.update();
+                });
+        }
+
+        // Lấy trạng thái LED thực tế trên Pi khi mới mở web
+        function fetchLedStatus() {
+            fetch('/api/led')
+                .then(response => response.json())
+                .then(data => {
+                    ledStatus = data.status;
+                    updateBtnStyle();
+                });
+        }
+
+        // Gửi lệnh Bật/Tắt xuống Pi khi bấm nút
+        function toggleLED() {
+            ledStatus = !ledStatus;
+            fetch('/api/led', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({status: ledStatus})
+            }).then(() => updateBtnStyle());
+        }
+
+        // Đổi màu nút
+        function updateBtnStyle() {
+            const btn = document.getElementById('led-btn');
+            if(ledStatus) {
+                btn.className = 'led-on';
+                btn.innerText = 'LED ĐANG BẬT';
+            } else {
+                btn.className = 'led-off';
+                btn.innerText = 'LED ĐANG TẮT';
+            }
+        }
+
+        setInterval(fetchData, 5000); // Tự động load biểu đồ sau mỗi 5 giây
+        fetchData();
+        fetchLedStatus();
+    </script>
+</body>
+</html>
